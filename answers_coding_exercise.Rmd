@@ -1,0 +1,244 @@
+---
+title: "Coding Exercise"
+author: "Sarah Shalaby"
+date: "05/01/2021"
+output:
+  html_document:
+    keep_md: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+*Exercise started at 10AM and finished at 2:30PM (London time)*
+
+*Solved using R markdown*
+
+## Introduction
+We are investigating a clinical dataset to look for associations between a diagnostic marker of diabetes, glycohemoglobin and other biomarkers. The aim is to assess a hypothesis of a doctor that certain lab tests are predictive of others, in our case of the level of glycohemoglobin.
+
+
+```{r, echo=FALSE, results = FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyverse)
+library(GGally)
+library(gridExtra)
+library(ggfortify)
+library(MASS)
+library(lindia)
+```
+
+
+## Question 0
+We start by loading the data.
+
+```{r cars}
+glycohemoglobin = read.csv("glycohemoglobin.csv")
+cotinine = read.csv("cotinine.csv")
+lipid = read.csv("lipid.csv")
+demographics = read.csv("demographics.csv")
+```
+
+
+## Question 1
+
+#### Structure of the datasets
+We then take a quick look at the structure of each dataset by using the **str** function.
+
+```{r}
+str(glycohemoglobin)
+str(cotinine)
+str(lipid)
+str(demographics)
+```
+
+#### Merging the datasets
+Each dataset has a column "ID" which identifies a unique patient. The identifiers are the same accross all datasets. As such, we combine all the datasets by patient "ID". We then once again use the **str** function to ensure the combined dataset was properly created. 
+
+```{r}
+data=Reduce(function(x,y) full_join(x,y,by="ID"), list(glycohemoglobin,cotinine,lipid,demographics))
+str(data)
+```
+
+## Question 2
+
+#### Description of dataset
+The dataset is composed of 10 variables:
+
+* A patient identifier: "ID"
+
+* A dependent numerical variable: "Glycohemoglobin"
+
+* 4 numerical biomarker variables: "Cotinine", "Triglycerides", "LDL.Cholesterol", "HDL.Cholesterol"
+
+* 2 numerical demographic variables: "age", "income poverty ratio"
+
+* 2 categorical demographic variables: "Sex", "race".
+
+We print the key summary statistics for the dataset.
+
+```{r}
+summary(data)
+```
+
+
+#### Age and sex of population
+Based on the **mean** and **median** functions, we find that the mean age of the population is 31.4 years and the median age is 26 years (which can also be found from **summary** function above). The population in this dataset seems to be younger than the US population (for example according to the US census data, the median age was 37.3 years in 2011 - https://www.census.gov/data/tables/time-series/demo/popest/2010s-national-detail.html) 
+
+We then use the **table** function to find there are 4,856 males and 4,900 females in the dataset. The data seems to be well balanced between males and females.
+
+
+```{r}
+mean(data$age,na.rm=TRUE)
+median(data$age,na.rm=TRUE)
+table(data$Sex)
+```
+
+## Question 3
+
+#### Building linear regressions
+We start by excluding all missing values. 7,072 observations are excluded.
+
+```{r}
+datadrop=na.exclude(data)
+nrow(data)-nrow(datadrop)
+```
+
+We then fit 4 linear regressions models where Glycohemoglobin is a function of each numerical clinical variable.
+
+```{r}
+lma <- lm(Glycohemoglobin.... ~ LDL.Cholesterol..mg.mL., data = datadrop)
+lmb <- lm(Glycohemoglobin.... ~ Triglycerides..mg.mL., data = datadrop)
+lmc <- lm(Glycohemoglobin.... ~ HDL.Cholesterol..mg.mL., data = datadrop)
+lmd <- lm(Glycohemoglobin.... ~ Cotinine..mg.mL., data = datadrop)
+```
+
+#### Assumptions of linear regressions
+These models are testing whether there is a linear relationship between Glycohemoglobin and each of the 4 variables separately: formally, we are testing for $H_0: \beta=0$ against $H_a: \beta \neq 0$ where $\beta$ is such that $Glycohemoglobin= intercept + \beta \times variable$ . To do so, we use a t-test. The p-value obtained represents the probability of observing a test-statistic which is at least as extreme as the one computed under $H_0$. We then fix a significance level (typically 5\%) and deem that we do not have enough evidence to accept $H_0$ if the p-value is lower than this significance level. We can obtain the p-values for the coefficients of a linear regression by using the function **summary**.
+
+The underlying assumptions of a linear regression model are:
+
+* Linear relationship between the independent variables and the covariate
+
+* Normal theory assumptions: Uncorrelation, normality and constant variance (homoscedasticity) of the errors
+
+
+## Question 4
+
+#### Ranking of models
+The best model in terms of p-value is the model that has the lowest p-value. As such, the models ranked by p-value are: b.) Triglycerides, c.) HDL-Cholesterol, a.) LDL-Cholesterol and d.) Cotinine. The clinical variable that has the lowest p-value is b.) Triglycerides. We note that at a 5\% significance level, we would conclude that Cotinine is not significant in modelling Glycohemoglobin; all other variables are statistically significant (at a 0.001 level).
+
+The estimated coefficients are positive for b.) Triglycerides, a.) LDL-Cholesterol -  meaning that an increase in each of this variable (separately) will cause an increase in Glycohemoglobin. For c.) HDL-Cholesterol, the estimated coefficient is negative - meaning that an increase in this variable will cause a decrease in Glycohemoglobin.
+
+```{r}
+summary(lma)$coefficients[2,]
+summary(lmb)$coefficients[2,]
+summary(lmc)$coefficients[2,]
+summary(lmd)$coefficients[2,]
+```
+
+#### Multiple tests of hypotheses
+
+*Note: I did some internet research to answer this question*
+
+Here we have conducted multiple tests of hypotheses separately. If we set a certain level of significance then we might accept or reject each hypothesis separately based on this level. However, if we want to test all of these hypotheses simultaneously and decide to combine all of these tests, we must be cautious of the fact that we are altering the significance level. 
+
+Indeed, let say we set a significance level of $\alpha$ meaning that we want the probability of rejecting $H_0$ when it is actually true to be less than $\alpha$. When testing for a single hypothesis we compare the p-value to $\alpha$ to control this level. However, if we are testing for $n$ hypothesis separately, the probability of incorrectly rejecting the null hypothesis in at least one test increases to become: $1-(1-\alpha)^n$. So, in our case with 4 tests and a significance level of 5\%, the probability of incorrectly rejecting the null hypothesis becomes 19\%.
+
+Several techniques exists to "correct" this level. One of which is the Bonferroni correction where we use a significance level for each test of $\alpha/n$. Another technique used in genomics is the False Discovery rate control.
+
+
+#### Further discussions on the models
+We draw below for each model the covariate against Glycohemoglobin and we see that indeed the linear relationship between Glycohemoglobin and Cotinine is not obvious.
+
+
+```{r, echo=FALSE}
+plota=ggplot(datadrop,aes(x = LDL.Cholesterol..mg.mL.,y = Glycohemoglobin....)) +  geom_point()+ggtitle("LDL.Cholesterol vs Glycohemoglobin")
+plotb=ggplot(datadrop,aes(x = Triglycerides..mg.mL.,y = Glycohemoglobin....)) +  geom_point()+ggtitle("Triglycerides vs Glycohemoglobin")
+plotc=ggplot(datadrop,aes(x = HDL.Cholesterol..mg.mL.,y = Glycohemoglobin....)) +  geom_point()+ggtitle("HDL.Cholesterol vs Glycohemoglobin")
+plotd=ggplot(datadrop,aes(x = Cotinine..mg.mL.,y = Glycohemoglobin....)) +  geom_point()+ggtitle("Cotinine vs Glycohemoglobin")
+grid.arrange(plota,plotb,plotc,plotd, nrow = 2,ncol=2, top="Covariates against Glycohemoglobin")
+
+```
+
+Furthermore, to verify the assumptions on the errors terms, we draw the residual plots for each model. For example, below we present the results for the model b.) Triglycerides. We observe some patterns in the residuals plots which seems to indicate that the normal theory assumptions are violated. Similar observations are made for other models.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+autoplot(lmb,label.size = 3)
+```
+
+
+## Question 5
+We now want to fit a linear regression model predicting Glycohemoglobin (%) as a function of other variables in the dataset.
+
+#### Model using only clinical variables
+We start by including all the clinical variables in the model. 
+
+```{r}
+lmallcl=lm(Glycohemoglobin.... ~ LDL.Cholesterol..mg.mL.+Triglycerides..mg.mL.+HDL.Cholesterol..mg.mL.+Cotinine..mg.mL., data = datadrop)
+summary(lmallcl)$coefficients
+```
+
+We note that the p-value for "Cotinine" is high and we decide to eliminate this variable. The final model only include LDL.Cholesterol, Triglycerides.and HDL.Cholesterol. Its key statistics are provided below
+
+```{r}
+lmallclf=lm(Glycohemoglobin.... ~ LDL.Cholesterol..mg.mL.+Triglycerides..mg.mL.+HDL.Cholesterol..mg.mL., data = datadrop)
+summary(lmallclf)
+```
+
+#### Potential improvement using demographic variables
+We note that the adjusted R-squared of the previous model is very low (about 5\%) and when looking at the residuals plots, there seems to be several violations of normal theory assumptions. As such, we investigate whether adding demographic variables could improve the model.
+
+We start by declaring the two categorical variables (race and sex) as factors. We also define the contrast type for these variables as the default contrast in R (**contr.treatment**)
+
+```{r}
+datadrop$Sex..1.Male..2.Female.=as.factor(datadrop$Sex..1.Male..2.Female.)
+datadrop$race..1.Mexican..2.Other.Hispanic..3.White..4.Black..5.Other.=as.factor(datadrop$race..1.Mexican..2.Other.Hispanic..3.White..4.Black..5.Other.)
+
+contrasts(datadrop$Sex..1.Male..2.Female.) <- "contr.treatment"
+contrasts(datadrop$race..1.Mexican..2.Other.Hispanic..3.White..4.Black..5.Other.)<- "contr.treatment"
+```
+
+
+We then fit a first model including all variables (except "ID").
+
+We note that for several variables the p-values are very high - which suggests that they are not significant in modelling Glycohemoglobin. As such, we remove variables step-by-step by starting by the one with the highest p-value until we find a model where all variables are statistically significant. We use a 5\% significance level. 
+
+For the categorical variable "Race", not all p-values  for all levels are significant. As such, to decide whether yes or no we should include this variable, we use goodness of fit measures on the models with and without this variable: we compare AIC and RSS (using the **drop1** function). The statistics are better when including the "Race" variable and as such we keep it. 
+
+The final model includes the following variables: Triglycerides, HDL.Cholesterol,age,race and Income.Poverty.Ratio. The summary statistics and the estimated coefficients for this model are given below.
+
+```{r}
+lmallf<- lm(Glycohemoglobin.... ~ Triglycerides..mg.mL.+HDL.Cholesterol..mg.mL.+age+race..1.Mexican..2.Other.Hispanic..3.White..4.Black..5.Other.+Income.Poverty.Ratio, data = datadrop)
+summary(lmallf)
+```
+
+#### Further potential improvement
+
+We note that the adjusted R-squared of the model is still low (16\%). Furthermore, again, the residuals plots show patterns which suggest violations of the normal theory assumptions.
+
+To further improve this model, we could look at potential transformation of the variables. For example, the graph below suggest that a boxcox transformation of Glycohemoglobin might be relevant.
+```{r}
+gg_boxcox(lmallf, showlambda = TRUE, lambdaSF = 3, scale.factor = 0.5)+ggtitle("Boxcox Plot")
+```
+
+When implementing the transformation, we find an improvement of the adjusted R-squared (from 16\% to 24\%).
+```{r}
+lmallf2<- lm((((Glycohemoglobin....)^(-2)-1)/(-2)) ~ Triglycerides..mg.mL.+HDL.Cholesterol..mg.mL.+age+race..1.Mexican..2.Other.Hispanic..3.White..4.Black..5.Other.+Income.Poverty.Ratio, data = datadrop)
+summary(lmallf2)$adj.r.squared 
+
+
+```
+
+We could also investigate adding interactions terms. 
+
+
+## Question 6
+We investigated whether certain test labs could be predictive of level of glycohemoglobin using a 2011 dataset from the NHANES.
+
+We first looked at possible associations between level of glycohemoglobin and other biomarkers by fitting separate linear regressions. The results suggested that there was very strong evidence in favor of the hypotheses that glycohemoglobin is associated with LDL.Cholesterol, Triglycerides and HDL.Cholesterol (with p-values lower than 0.001), but not with Cotinine. The estimated coefficients were positive for Triglycerides and LDL-Cholesterol : an increase in each of this variable causes an increase in Glycohemoglobin, and negative for HDL.Cholesterol: an increase in this variable causes a decrease in Glycohemoglobin.
+
+We then fitted multi-linear regressions using subsets of the variables. We found that some demographic variables (age, race and income poverty ratio) are also associated with Glycohemoglobin and that including them could improve predictions. 
+
+In summary, our analysis showed evidence that Glycohemoglobin is associated with other clinical (and demographic) variables. However, the R-squared remained low (<20\%) suggesting that the models would not allow to precisely predict values of Glycohemoglobin and the residuals indicated violation of normal theory assumptions.  We could improve our predictions by using transformed or additional variables. 
